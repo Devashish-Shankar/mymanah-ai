@@ -2,8 +2,10 @@
 from fastapi import APIRouter
 
 from app.schemas.journal import JournalRequest, JournalResponse
+from app.services.journal_service import JournalService
 
 router = APIRouter(tags=["Journal Analysis"])
+journal_service = JournalService()
 
 
 @router.post(
@@ -11,13 +13,12 @@ router = APIRouter(tags=["Journal Analysis"])
     response_model=JournalResponse
 )
 def analyze_journal(request: JournalRequest):
-    # Temporary mock response for API testing.
-    # No AI inference happens here yet.
+    sentiment_result = journal_service.analyze_sentiment(request.text)  
     return JournalResponse(
-        sentiment="neutral",
+        sentiment=sentiment_result["label"],
         emotion="neutral",
         moodScore=5,
-        summary="Model integration is pending.",
+        summary="Emotion, mood, crisis and summarization models are pending.",
         crisisRisk="LOW",
-        confidence=0.0
+        confidence=sentiment_result["confidence"]
     )
