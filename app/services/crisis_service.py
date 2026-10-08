@@ -138,10 +138,7 @@ class CrisisService:
 
         # Current suicidal/self-harm ideation without explicit
         # plan/attempt.
-        elif ideation:
-            risk = "MEDIUM"
-
-        elif crisis_probability >= 0.80:
+        elif ideation or crisis_probability >= 0.80:
             risk = "MEDIUM"
 
         else:

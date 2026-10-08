@@ -15,12 +15,26 @@ journal_service = JournalService()
 def analyze_journal(request: JournalRequest):
     sentiment_result = journal_service.analyze_sentiment(request.text)  
     emotion_result = journal_service.analyze_emotion(request.text)  # Currently not used in response
-    crisis_risk_result = journal_service.analyze_crisis(request.text)  # Currently not used in response
+    crisis_risk_result = journal_service.analyze_crisis(request.text) 
+    mood_score = journal_service.analyze_mood(
+        sentiment=sentiment_result["label"],
+        emotion=emotion_result["emotion"],
+        confidence=sentiment_result["confidence"]
+    )
+    summary = journal_service.analyze_summary(request.text)
+    overall_confidence = round(
+        (
+            sentiment_result["confidence"]
+            + emotion_result["confidence"]
+        ) / 2,
+        4
+    )
     return JournalResponse(
         sentiment=sentiment_result["label"],
         emotion=emotion_result["emotion"],
-        moodScore=5,
-        summary="Mood and summarization models are pending.",
-        crisisRisk=crisis_risk_result["risk_level"],
-        confidence=crisis_risk_result["confidence"]
+        moodScore=mood_score,
+        summary=summary,
+        crisisRisk=crisis_risk_result["crisisRisk"],
+        confidence=overall_confidence
     )
+
