@@ -1,4 +1,4 @@
-from transformers import pipeline
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
 
 class SummarizerModel:
@@ -9,29 +9,40 @@ class SummarizerModel:
     MODEL_NAME = "sshleifer/distilbart-cnn-12-6"
 
     def __init__(self):
-        self.pipeline = pipeline(
-            "summarization",
-            model=self.MODEL_NAME
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            self.MODEL_NAME
+        )
+
+        self.model = AutoModelForSeq2SeqLM.from_pretrained(
+            self.MODEL_NAME
         )
 
     def predict(self, text: str) -> str:
-        # Handle short journal entries safely.
+
+        # For very short journal entries, avoid forcing
+        # an abstractive summarization model.
         if len(text.split()) < 20:
             return text.strip()
 
-        word_count = len(text.split())
-
-        max_length = min(100, max(30, word_count // 2))
-        min_length = min(30, max(10, word_count // 4))
-
-        if min_length >= max_length:
-            min_length = max(5, max_length - 5)
-
-        result = self.pipeline(
+        inputs = self.tokenizer(
             text,
-            min_length=min_length,
-            max_length=max_length,
-            do_sample=False
+            return_tensors="pt",
+            truncation=True,
+            max_length=1024
         )
 
-        return result[0]["summary_text"].strip()
+        summary_ids = self.model.generate(
+            inputs["input_ids"],
+            attention_mask=inputs["attention_mask"],
+            max_length=100,
+            min_length=25,
+            num_beams=4,
+            early_stopping=True
+        )
+
+        summary = self.tokenizer.decode(
+            summary_ids[0],
+            skip_special_tokens=True
+        )
+
+        return summary.strip()
