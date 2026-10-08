@@ -154,10 +154,10 @@ Example response:
 {
   "sentiment": "positive",
   "emotion": "happy",
-  "moodScore": 8,
-  "summary": "The writer describes a positive day spent with family and expresses strong happiness.",
+  "moodScore": 9,
+  "summary": "Today was an amazing day. I spent time with my family and I feel extremely happy.",
   "crisisRisk": "LOW",
-  "confidence": 0.98
+  "confidence": 0.9368
 }
 ```
 
@@ -207,9 +207,9 @@ It is downloaded and executed locally using Hugging Face Transformers.
 
 The model was selected because it is open-source, supports local inference, provides direct sentiment classification, and integrates with the Transformers ecosystem.
 
-### Limitation
+### Limitations
 
-The model was trained on social-media-style text rather than specifically on private journal entries. Domain-specific validation would improve production reliability.
+The model was trained on social-media-style text rather than specifically on private journal entries. Long reflective writing, mixed emotions, sarcasm, and context-dependent statements may therefore be challenging. Confidence is model confidence, not a guarantee of correctness. Domain-specific validation or fine-tuning on journal data would improve production reliability.
 
 ---
 
@@ -234,6 +234,10 @@ The application maps model emotions into these application-level categories:
 - Neutral
 
 The mapping layer keeps the underlying model independent from the application's output vocabulary.
+
+### Model Limitation
+
+The original GoEmotions taxonomy is more fine-grained than these application categories. Some nuanced emotions are therefore grouped into broader categories. The model can also identify multiple emotions in one text, while this API exposes a dominant application-level emotion.
 
 ---
 
@@ -442,6 +446,10 @@ The model is downloaded locally and executed with PyTorch and Hugging Face Trans
 
 It receives the user question and retrieved document context.
 
+### Model Limitation
+
+Qwen2.5-1.5B-Instruct is intentionally small enough for practical local inference, but this also limits reasoning depth compared with larger instruction-tuned models. It can still occasionally generate unsupported wording even when prompted to stay grounded. Retrieval quality therefore remains critical.
+
 ---
 
 # Grounded Generation
@@ -572,6 +580,144 @@ The project uses specialized models instead of forcing one model to perform ever
 | Vector Search | FAISS | Similarity search |
 | Generation | Qwen2.5-1.5B-Instruct | Local grounded generation |
 | API | FastAPI | REST API layer |
+
+---
+
+# Model-Specific Limitations
+
+The models used in this project are pretrained open-source models selected for practical local inference. They are not assumed to be perfectly optimized for the exact journal or document domain of this application.
+
+## 1. Sentiment Model — CardiffNLP RoBERTa
+
+Model:
+
+```text
+cardiffnlp/twitter-roberta-base-sentiment-latest
+```
+
+### Limitations
+
+- The model was trained primarily on Twitter/social-media-style language, which can differ from private journal writing.
+- Long reflective entries, mixed emotions, sarcasm, and context-dependent statements may be difficult to classify correctly.
+- A high confidence score represents model confidence in its predicted class; it is not a guarantee of correctness.
+- Neutral or emotionally mixed journal text may sometimes be pushed toward positive or negative sentiment.
+- Domain-specific validation or fine-tuning on journal data would improve reliability.
+
+Therefore, sentiment output is treated as an NLP signal rather than a definitive measurement of a person's emotional state.
+
+---
+
+## 2. Emotion Model — RoBERTa GoEmotions
+
+Model:
+
+```text
+SamLowe/roberta-base-go_emotions
+```
+
+### Limitations
+
+- The underlying GoEmotions taxonomy is more fine-grained than the simplified categories exposed by this application.
+- The application-level mapping can therefore lose emotional nuance.
+- Closely related emotions can be difficult to distinguish from short or ambiguous journal text.
+- A journal entry may contain multiple emotions, while the API exposes a dominant application-level emotion.
+- `Stress` and `Anxiety` are represented through application-level mapping and should not be interpreted as clinical measurements.
+- Emotion classification is sensitive to wording and context.
+
+The mapping is therefore an engineering simplification rather than a psychological assessment.
+
+---
+
+## 3. Crisis Model — ModernBERT Crisis Classifier
+
+Model:
+
+```text
+Akashpaul123/modernbert-crisis-detection
+```
+
+### Limitations
+
+The crisis model is the most safety-sensitive component.
+
+- The model can react strongly to crisis-related language even when the surrounding context changes the meaning.
+- Explicit negation, third-person statements, historical experiences, prevention/supportive statements, and references to another person can be difficult cases.
+- A model probability is not equivalent to a real-world risk probability.
+- The model has not been clinically validated for this application.
+- A small manually constructed test set cannot establish real-world clinical performance.
+- Both false positives and false negatives are possible.
+
+For this reason, the application does not directly convert raw model probability into `LOW`, `MEDIUM`, or `HIGH`. A lightweight context-aware decision layer is applied after model inference.
+
+The crisis output must not be used as a substitute for professional assessment, clinical triage, or emergency decision-making.
+
+---
+
+## 4. Sentence-Transformer Embedding Model
+
+The RAG pipeline uses a local Sentence Transformers model to create embeddings for document chunks and user questions.
+
+### Limitations
+
+- Embedding quality depends on how well the pretrained model represents the language and domain of the uploaded document.
+- Very short, noisy, poorly extracted, or highly technical text can produce less useful embeddings.
+- Dense retrieval may miss exact keyword matches, identifiers, numbers, or highly specific terminology.
+- Semantic similarity does not guarantee that a retrieved chunk contains the complete answer.
+- Retrieval quality can vary depending on the embedding model and document domain.
+
+For more demanding document collections, hybrid lexical + vector retrieval and reranking would improve robustness.
+
+---
+
+## 5. Qwen2.5-1.5B-Instruct RAG Generator
+
+Model:
+
+```text
+Qwen/Qwen2.5-1.5B-Instruct
+```
+
+### Limitations
+
+- This is a relatively small local instruction-following model, so its reasoning capability is more limited than larger language models.
+- Even with strict grounding instructions, a generative model can occasionally produce wording that is not fully supported by the retrieved context.
+- The final answer depends heavily on retrieval quality.
+- If relevant information is split across multiple chunks or the wrong chunks are retrieved, the answer may be incomplete.
+- Small models can struggle with long multi-step questions, complex tables, numerical reasoning, and highly technical documents.
+- Prompt instructions reduce unsupported generation but cannot guarantee zero hallucination.
+
+The application therefore returns retrieval metadata and a grounded fallback response rather than treating the generated answer as authoritative.
+
+---
+
+## 6. PDF Text Extraction
+
+The RAG pipeline depends on extracted PDF text.
+
+### Limitations
+
+- Text-based PDFs generally work better than scanned PDFs.
+- Complex layouts, multi-column pages, tables, equations, headers/footers, and image-heavy pages may not be extracted in the ideal reading order.
+- Scanned documents may require OCR.
+- Extraction errors can propagate into chunking, embeddings, retrieval, and generation.
+
+Improved production versions should use OCR and layout-aware document parsing where required.
+
+---
+
+## 7. Chunking and Retrieval
+
+The RAG system uses document chunks before generating embeddings.
+
+### Limitations
+
+- Very small chunks may lose context.
+- Very large chunks may contain unrelated information and reduce retrieval precision.
+- Fixed chunking can split a definition, paragraph, table, or explanation across chunk boundaries.
+- Increasing the number of retrieved chunks does not always improve answer quality because irrelevant context can dilute useful evidence.
+- Similarity scores are ranking signals, not factual correctness scores.
+
+Future versions can use semantic chunking, overlap tuning, metadata filtering, hybrid retrieval, and reranking.
 
 ---
 
