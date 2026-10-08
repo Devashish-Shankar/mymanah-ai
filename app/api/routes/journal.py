@@ -14,11 +14,12 @@ journal_service = JournalService()
 )
 def analyze_journal(request: JournalRequest):
     sentiment_result = journal_service.analyze_sentiment(request.text)  
+    emotion_result = journal_service.analyze_emotion(request.text)  # Currently not used in response
     return JournalResponse(
         sentiment=sentiment_result["label"],
-        emotion="neutral",
+        emotion=emotion_result["emotion"],
         moodScore=5,
-        summary="Emotion, mood, crisis and summarization models are pending.",
+        summary="Mood, crisis and summarization models are pending.",
         crisisRisk="LOW",
         confidence=sentiment_result["confidence"]
     )
